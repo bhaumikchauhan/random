@@ -1,0 +1,184 @@
+{
+  "app_name": "FieldForce CRM",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "Professional, data-dense, and highly readable utility with clear hierarchy and comfortable spacing for field operations.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#1C1917",
+    "surfaceSecondary": "#F5F5F4",
+    "onSurfaceSecondary": "#44403C",
+    "surfaceTertiary": "#E7E5E4",
+    "onSurfaceTertiary": "#57534E",
+    "surfaceInverse": "#1C1917",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#4D7C0F",
+    "brandPrimary": "#4D7C0F",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#65A30D",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#ECFCCB",
+    "onBrandTertiary": "#3F6212",
+    "success": "#166534",
+    "onSuccess": "#FFFFFF",
+    "warning": "#CA8A04",
+    "onWarning": "#FFFFFF",
+    "error": "#BE123C",
+    "onError": "#FFFFFF",
+    "info": "#44403C",
+    "onInfo": "#FFFFFF",
+    "border": "#E7E5E4",
+    "borderStrong": "#A8A29E",
+    "divider": "#F5F5F4"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous comfortable padding for touch targets, avoid cramming despite data density.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Bottom tab bar",
+      "Sticky headers over scrolling lists",
+      "Floating Action Buttons (FAB)"
+    ],
+    "dont's": [
+      "Data cards",
+      "Forms",
+      "Dense map overlay elements"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Login",
+      "purpose": "Role-based entry point for Admin and Salesman with a professional logistics backdrop.",
+      "states": {
+        "loading": "Spinner over disabled form.",
+        "empty": "N/A",
+        "error": "Inline text below fields, shake animation on input."
+      },
+      "layout": "Hero image (Warehouse) occupying top 40% with a gradient scrim bottom-to-top. Bottom 60% holds a clean white surface card with role toggle (segmented control) and Email/Password fields. Primary Login CTA sticky above keyboard."
+    },
+    {
+      "name": "Admin Dashboard",
+      "purpose": "High-level overview of daily field performance and outstanding dues.",
+      "states": {
+        "loading": "Skeleton cards for metrics.",
+        "empty": "N/A",
+        "error": "Retry button full screen."
+      },
+      "layout": "Scrollable view. Top section: 2-column grid for key metrics (Today's Visits, Total Customers, Active Salesmen, Outstanding). Use 'brandTertiary' background for the Outstanding Dues card to highlight it. Middle section: 'Live Tracking' map snapshot. Bottom section: List of recent visits."
+    },
+    {
+      "name": "Customer List",
+      "purpose": "Directory of all shops with search and filter capabilities.",
+      "states": {
+        "loading": "List skeleton.",
+        "empty": "Empty box illustration, 'No customers found', 'Add Customer' CTA.",
+        "error": "Toast or inline error card."
+      },
+      "layout": "Sticky glass header with Search Bar and Filter row (Area/Status). Flat list of customers. Each card shows Shop Name, Area, and an 'Outstanding' badge if applicable. A floating action button (FAB) for 'Add Customer'."
+    },
+    {
+      "name": "Customer Details",
+      "purpose": "Comprehensive view of a specific shop including quick actions.",
+      "states": {
+        "loading": "Skeleton UI over header.",
+        "empty": "N/A",
+        "error": "Error loading details."
+      },
+      "layout": "Top: Shop photo banner with gradient scrim and Shop Name overlay. Below banner: Horizontal scroll of quick action pills (WhatsApp, Call, Map). Main content: Tabs or grouped sections (Details, Visits Log, Orders, Outstanding). Floating CTA: 'Log Visit' pinned at bottom."
+    },
+    {
+      "name": "Add/Edit Customer Form",
+      "purpose": "Data entry screen for adding a new shop, capturing GPS and photos.",
+      "states": {
+        "loading": "Saving overlay.",
+        "empty": "Blank form fields.",
+        "error": "Inline validation errors."
+      },
+      "layout": "Single column form inside a KeyboardAvoidingView. Image picker placeholders for 'Shop Photo' and 'Visiting Card' at the top. GPS field with 'Fetch Current Location' button. Sticky 'Save Customer' button at the bottom."
+    },
+    {
+      "name": "Log a Visit",
+      "purpose": "Quick workflow for a salesman to record an interaction.",
+      "states": {
+        "loading": "Submitting spinner in CTA.",
+        "empty": "Blank form.",
+        "error": "Alert dialog."
+      },
+      "layout": "Bottom sheet or modal. Auto-fetches current GPS. Fields: Outcome (segmented control: Order, No Order, Follow-up), Order Amount (if applicable), Remarks, Next Follow-up Date. Primary CTA to submit."
+    },
+    {
+      "name": "Route Map",
+      "purpose": "Visual plotting of salesman locations and visits.",
+      "states": {
+        "loading": "Map loading spinner.",
+        "empty": "Map centered with no pins, toast 'No visits today'.",
+        "error": "Location permission denied card."
+      },
+      "layout": "Full screen react-native-maps view. Top safe area has a floating glass header to select Salesman and Date. Bottom 30% has a draggable Bottom Sheet listing the sequence of visits. Map shows numbered pins and a polyline connecting them."
+    }
+  ],
+  "images": {
+    "login_hero": {
+      "url": "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzR8MHwxfHNlYXJjaHwxfHxsb2dpc3RpY3MlMjBkZWxpdmVyeSUyMHdhcmVob3VzZSUyMGJveGVzfGVufDB8fHx8MTc4Njc3MTE1NHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Warehouse inventory background"
+    },
+    "empty_state": {
+      "url": "https://images.unsplash.com/photo-1573376670774-4427757f7963?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwxfHxlbXB0eSUyMGJveCUyMGlsbHVzdHJhdGlvbiUyMGNsZWFuJTIwbWluaW1hbHxlbnwwfHx8fDE3ODY3NzExNDl8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Clean empty box"
+    },
+    "map_pins": {
+      "url": "https://images.unsplash.com/photo-1661577804141-6f0180f82373?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxyb3V0ZSUyMG1hcCUyMHBpbiUyMG5hdmlnYXRpb24lMjBsb2NhdGlvbnxlbnwwfHx8fDE3ODY3NzExNDl8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Map with route pins"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color palette. Do NOT use any blue or purple shades for primary actions or info states.",
+    "Implement the gradient scrim (transparent to surfaceInverse) over the login hero image to ensure text readability.",
+    "For the Map UI, use `react-native-maps`. Keep the map clean, using the specified map_pins image or standard high-contrast markers.",
+    "When integrating WhatsApp, use deep linking `Linking.openURL('whatsapp://send?phone=...')` combined with a prefilled template.",
+    "Ensure the 'Outstanding Amount' is highly visible; use the `error` (#BE123C) color text when a customer owes money to draw attention.",
+    "Always pin primary CTAs (like 'Log Visit' and 'Save') to the bottom of the screen with proper safe-area padding so they are thumb-accessible.",
+    "Use Phosphor icons consistently across all tabs and actions. Keep weight identical.",
+    "Adhere strictly to <Anti_Patterns>. Avoid default headers and ensure 44x44pt touch targets for all interactive elements."
+  ]
+}

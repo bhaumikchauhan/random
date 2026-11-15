@@ -1,0 +1,16 @@
+{
+  "name": "FieldForce CRM",
+  "short_name": "FieldForce",
+  "description": "FMCG field sales CRM — customers, beat plans, billing, and live tracking.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1C1917",
+  "theme_color": "#4D7C0F",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

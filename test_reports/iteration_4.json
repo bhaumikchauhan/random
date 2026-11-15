@@ -1,0 +1,58 @@
+{
+  "summary": "Tested the 4 NEW capabilities (Approval workflow, Geo-fence check-in, Attendance XLSX export, Share) plus regressions. Backend: 16/16 pytest cases PASSED (see /app/backend/tests/test_fmcg_iter4.py) — every rule from the spec is enforced: salesman-created customers are 'pending', admin-created are 'approved'; salesman can PATCH own pending but is 403'd 'approved and locked' after admin approve; admin PATCH always works; approve endpoint is 403 for salesman; ?approval=pending/approved list filters return the right subsets; salesman scoping intact. Geo-fence: near-territory check-in returns check_in_flagged=false with a numeric check_in_distance_km and no warning; far check-in (Delhi vs Mumbai centroid, radius 10 km) returns flagged=true, distance 1148.12 km and a proper warning string. Salesman POST /api/salesmen with geofence_radius_km=25 persists, is echoed in GET, and PATCH to 7 updates it. Attendance export /api/attendance/export returns HTTP 200, correct XLSX content-type, Content-Disposition attachment filename (attendance_2026-08.xlsx), valid PK zip header, sheets 'Daily' + 'Summary'; ?month=YYYY-MM works; salesman gets 403. Frontend (mobile 390x844): Admin dashboard 'Approvals' tile shows count badge (1 -> 0 after approve), navigation to /approvals lists pending customers with per-row approve buttons (testID approve-{id}); tapping approve removes the row and the dashboard badge updates. Customer list shows 'Pending' chip (testID pending-{id}) on pending customers. AdminAttendance header has attendance-export-btn — pressing it triggers a real XLSX download (Playwright captured attendance_2026-08.xlsx) and the 'Attendance sheet ready' toast appears. AdminAttendance daily row displays a 'km from area' warning badge (testID att-flag-{sid}) for the flagged TEST GeoFlag User: '1148.12 km from area'. SalesmanAttendance for Priya renders without error. **CRITICAL FRONTEND BUG FOUND**: /app/frontend/app/customer/[id].tsx crashes with 'Rendered more hooks than during the previous render' the moment any customer detail page is opened — `useState(approving)` on line 52 is declared AFTER the conditional early-return on lines 38-46, which violates the React Rules of Hooks. This blocks verification of pending-badge, admin 'Approve this customer' button, edit-button-hidden-for-approved, and both share buttons in the running app (although testIDs and logic are all present in the source). Backend tests confirm the approval + share data pipeline is correct; ONLY the customer detail screen render is broken. Test data cleanup complete (all TEST_* customers deleted).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "app/customer/[id].tsx",
+        "issue": "Rules-of-Hooks violation: `const [approving, setApproving] = useState(false)` is on line 52, placed AFTER the conditional early-return on lines 38-46 (`if (loading || !c) return <ActivityIndicator/>`). The first render (loading) calls 19 hooks; the second render (data loaded) calls 20, causing a red-screen crash 'Rendered more hooks than during the previous render' on every customer detail visit. Fix: move the useState(false) call to line 22 (with the other top-level useStates), before the early return.",
+        "testID": "customer-detail-screen",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Salesman viewing an APPROVED customer + Admin approve button + Share buttons on customer detail",
+        "issue": "Cannot verify in running app because the entire /customer/[id] screen crashes on load (see ui_bugs above). Source inspection confirms testIDs `pending-badge`, `approve-customer-btn`, `edit-customer-btn` (gated by canEdit = !(isSalesman && !isPending)), `share-customer-btn`, `detail-share` are all present and logically correct — but they cannot render until the hook order bug is fixed.",
+        "affected_testIDs": ["pending-badge", "approve-customer-btn", "edit-customer-btn", "share-customer-btn", "detail-share"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_fmcg_iter4.py",
+    "/app/test_reports/pytest/pytest_iter4.xml"
+  ],
+  "action_items": [
+    "[CRITICAL] Fix Rules-of-Hooks violation in /app/frontend/app/customer/[id].tsx line 52 — move `const [approving, setApproving] = useState(false);` up to line 22 (alongside the other useState calls) BEFORE the `if (loading || !c) return ...` early-return on line 38.",
+    "After the fix, re-verify: (a) salesman opening a PENDING customer sees pending-badge and edit pencil, (b) salesman opening an APPROVED customer sees NO pending-badge and NO edit pencil, (c) admin opening a PENDING customer sees the 'Approve this customer' bar and tapping it moves it to approved, (d) header share-customer-btn and quick-action detail-share are pressable.",
+    "(Optional cleanup — carried over from prior iterations) Delete the TEST_iter4_geo_* and TEST_iter4_geoflag_* salesmen and TEST_att_* users left behind by pytest — they show up as extra rows in the Admin Attendance list (currently 4 salesmen instead of 2). No DELETE /api/salesmen endpoint exists, so this needs a direct Mongo cleanup or a new admin endpoint.",
+    "(Optional) Migrate remaining 'shadow*' style props to 'boxShadow' — RN-web deprecation warnings still fire on login screen (carried over from iter 1)."
+  ],
+  "critical_code_review_comments": [
+    "app/customer/[id].tsx:52 — useState placed after conditional early return. React strict/dev mode catches this immediately (red screen). Any state hook must be declared unconditionally at the top of the component.",
+    "server.py:1000-1040 attendance_check_in — geo-fence logic is clean: uses haversine distance vs centroid of salesman.customers with GPS, radius default 10 km, returns numeric distance + boolean flag + human-readable warning. Verified with 1148.12 km Delhi->Mumbai check.",
+    "server.py:552-565 create_customer correctly stamps approval_status='pending' for salesman-created and 'approved' for admin-created customers.",
+    "server.py:581-600 update_customer — salesman is 403'd with the exact message 'This customer is approved and locked. Ask an admin to make changes.' once approval_status != 'pending'. Great UX message.",
+    "server.py:1135-1220 attendance_export — Workbook properly built with Daily + Summary sheets, header styling, month regex filter, Content-Disposition attachment; correct 403 for salesmen via require_admin dep.",
+    "AdminAttendance.tsx export flow — properly wraps `api.exportAttendance` in try/catch, shows toast on both success and failure. testID `attendance-export-btn` present."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_fmcg_iter4.py",
+    "/app/test_reports/pytest/pytest_iter4.xml",
+    "/app/test_reports/iteration_4.json"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16)",
+    "frontend": "Approvals + AdminAttendance export + Pending chip on customer list + SalesmanAttendance render = 4/5 flows verified. Customer detail (Share + Pending badge + edit-lock) BLOCKED by hook-order crash — 0/1 verifiable in running app (source review confirms testIDs+logic are correct)."
+  },
+  "seed_data_creation": "Backend pytest created 2 disposable TEST salesmen (TEST_iter4_geo_*, TEST_iter4_geoflag_*) via POST /api/salesmen and 1 disposable customer at Mumbai GPS (deleted after use). UI test also created 3 pending customers via API which were all cleaned up (verified via GET /api/customers?search=TEST returning empty after cleanup). The 2 TEST salesmen linger because there is no DELETE /api/salesmen endpoint — they surface as extra Absent rows in AdminAttendance.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 4 testIDs to reuse — Approvals: quick-approvals (dashboard tile w/ badge), approvals-back, approval-row-{id}, approve-{id}. Customer detail: back-btn, edit-customer-btn (conditionally rendered), share-customer-btn (header), pending-badge, approve-customer-btn (admin only), detail-share (quick action), detail-whatsapp, detail-call, detail-map. Customer list: customer-row-{id}, pending-{id}. AdminAttendance: attendance-export-btn (in header), att-flag-{sid} (flagged badge on daily rows). Backend run: `EXPO_PUBLIC_BACKEND_URL=<url> pytest /app/backend/tests/test_fmcg_iter4.py -v -o 'addopts='`. IMPORTANT: after the customer detail hook-order fix, re-run the customer detail flow (login as John, open a pending customer, verify pending-badge + edit pencil; open an approved seed customer, verify NO edit pencil + Share works; then login as admin, open a pending customer, verify Approve bar).",
+  "rca_of_issue": "Root cause of the customer detail red-screen: hook ordering violation in /app/frontend/app/customer/[id].tsx. React tracks hook calls positionally; when the component first renders with loading=true it early-returns on line 46 having called 19 hooks; when data arrives (loading=false), the component proceeds past line 46 and encounters a 20th hook `useState(approving)` on line 52. React's dev-mode invariant fires 'Rendered more hooks than during the previous render' and swaps the tree with a red LogBox. Reproduction: log in as john/priya, tap any customer row -> immediate crash. Mitigation: move the useState declaration to line 22 (with the other useStates) before the early-return branch. No backend impact."
+}

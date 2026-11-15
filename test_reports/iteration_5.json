@@ -1,0 +1,52 @@
+{
+  "summary": "Tested Item Master (products CRUD) and Order Entry (auto-priced multi-line orders) end-to-end. BACKEND: 16/16 pytest cases PASSED (/app/backend/tests/test_items_orders.py). Items CRUD: create, list, ?q= search (by both name and code), PATCH updates fields, DELETE removes, and the unique item_code constraint correctly returns 409 on duplicate. RBAC: salesman can GET /items but is 403'd on POST. Orders: POST /api/orders computes each line as net = qty*rate*(1-disc/100)*(1+tax/100) rounded to 2dp (verified 10*100*0.9*1.18=1062.00 and 5*50*1.05=262.50, total=1324.50), auto-generates order_number in ORD-00xxx format, order_number monotonically increments on successive orders, rejects 0-qty (400) and empty lines (400). Admin can create orders for any customer (201); salesman is 403'd when creating for another salesman's customer. GET /orders shows all rows to admin and is scoped to own for salesman; GET /orders/{id} returns lines + customer_name + salesman_name; PATCH /orders/{id} cycles Pending -> Paid -> Partial -> Pending and persists (verified with GET afterwards). FRONTEND (mobile 390x844, admin@fmcg.com): Dashboard 'Orders' quick tile navigates to /orders; FAB 'orders-fab' opens /order/new; selecting a customer (order-cust-<id>), tapping 'Add Item', picking an item from the picker (pick-item-<id>), and editing qty=10/disc=10/free=2 shows live Net = ₹2,268 and Order Total = ₹2,268 matching backend math for Aashirvaad Atta 5kg (rate 240, tax 5). Place Order navigates to /order/6a801a42... showing ORD-00006 header, Electronics Hub, salesman name, line breakdown and Total ₹2,268. Admin taps the status pill and it cycles Pending -> Paid -> Partial live (backend PATCH round-trip). Items screen (More -> Items/Products): admin add-item modal opens, saves item, appears in list; item-del-<id> removes it (verified count went to 0). All target testIDs from the source render correctly. Note: my first attempt used selector `[data-testid^=\"order-cust-\"]` which accidentally matched the search TextInput (testID `order-cust-search`) as the first hit; renaming this testID would prevent that class of mistake for future test agents. Salesman flow (john@fmcg.com) verified customers are scoped to John's 3 assigned customers (Fresh Foods Corner / Local Grocer / Super Mart) and items list renders. No RN red-screen, no console errors during the flow (only benign 'shadow*' style-prop deprecation warnings from RN-web). No mocked APIs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "app/order/new.tsx",
+       "issues": [
+         "Testability nit: `testID=\"order-cust-search\"` for the search TextInput uses the same prefix as `order-cust-{id}` used for each customer row. A `[data-testid^=\"order-cust-\"]` sweep selector picks the search input first. Suggest renaming search input to `order-cust-search-input` OR renaming rows to `order-cust-row-{id}`."
+       ]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_items_orders.py",
+    "/app/test_reports/pytest/pytest_iter5.xml"
+  ],
+  "action_items": [
+    "(Optional testability) Rename the customer-search TextInput testID in app/order/new.tsx line 106 from `order-cust-search` to `order-cust-search-input` (or rename each row to `order-cust-row-<id>`), so testers can safely use a prefix-selector to enumerate customer rows.",
+    "(Optional cleanup) Backend tests create a handful of TEST_* items and a few Pending orders in the live DB (best-effort deletion of items happens at session teardown; orders remain because there is no DELETE /api/orders endpoint). The orders are Pending and small-total; recommend either adding an admin DELETE /api/orders/{id} route for test/dev cleanup or documenting that seed data is expected to grow across CI runs.",
+    "(Carried over from iter 4, still open) React-Native-Web `shadow*` -> `boxShadow` deprecation warnings still logged in browser console on multiple screens including /order/new and /orders. Non-blocking but noisy."
+  ],
+  "critical_code_review_comments": [
+    "server.py:820-828 `_next_order_number` uses MongoDB find_one_and_update on a counters collection with $inc + upsert + return_document=AFTER — atomic and safe under concurrency. Good pattern.",
+    "server.py:831-849 `_compute_line` correctly rounds only the final net (avoiding intermediate rounding errors) and stores rate, tax_rate, discount, free_qty, mrp on the line so the order detail is fully self-contained if the master item is later edited/deleted. Matches the frontend `lineNet()` in app/order/new.tsx:18-24.",
+    "server.py:873-911 create_order validates ObjectId, existence, per-line qty>0, and enforces salesman scoping via cust.salesman_id check. Good.",
+    "server.py:918-969 items CRUD applies require_admin on POST/PATCH/DELETE and only enforces auth on GET (list_items). Delete is a hard delete; consider soft-delete via `active=False` since orders reference item_id.",
+    "server.py:972-1000 update_order_status has an interesting side-effect: transitioning to/from Paid auto-adjusts customer.outstanding by ±total_amount. This is undocumented in the review-request but validated in test_fmcg_new_features.py. NOT re-tested this iteration.",
+    "app/order/new.tsx:53 total useMemo depends on `lines` but lineNet reads item.rate and item.tax_rate from the item object embedded in the line — safe since items are captured at add-time.",
+    "app/order/new.tsx:66-81 save() calls api.createOrder and router.replace(`/order/${id}`) — replace prevents back-nav to a stale New Order screen.",
+    "app/order/[id].tsx:65 cycleStatus is guarded by `user?.role === 'admin'` — the Pressable's onPress is undefined for salesman (no-op tap). Fine but users may find it confusing there is no visual cue that the pill is non-interactive; consider hiding the pressable feedback for salesman.",
+    "app/items.tsx:64-68 remove() calls DELETE and mutates local state on success but doesn't handle 500/network errors — a failed delete silently drops the row from the UI while it remains in DB. Wrap in try/catch and show a toast."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_items_orders.py",
+    "/app/test_reports/pytest/pytest_iter5.xml",
+    "/app/test_reports/iteration_5.json"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16)",
+    "frontend": "100% (Items add+delete, Order Total quick-tile, FAB->New Order, customer picker, item picker, live net calc, Place Order->detail nav, admin status-cycle Pending->Paid->Partial)"
+  },
+  "seed_data_creation": "Backend pytest created ~7 TEST_* items (auto-cleaned at session teardown for those still referenced; delete-test item was already removed by its own test). A handful of small-total Pending orders (order_number ORD-00001..ORD-0000n) remain in DB with no DELETE endpoint available. UI test created 1 more UITEST item and deleted it, and 2 real orders (1 admin: Electronics Hub ₹2,268 ORD-00006; 1 salesman: John/Fresh Foods Corner ₹756).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter 5 testIDs to reuse — Items screen: item-add-btn, items-search, item-row-<id>, item-del-<id>, item-code, item-name, item-rate, item-tax, item-mrp, item-save-btn, item-modal-close, items-back. Order list: orders-back, orders-fab, order-filter-<All|Pending|Paid|Partial>, order-row-<id>, order-status-<id>. New order: order-back, order-cust-search (WARNING: this is the SEARCH input, NOT a customer row — prefix `order-cust-` matches both), order-cust-<id> (row), order-change-cust (after selection), order-add-item, order-item-search, pick-item-<id>, item-picker-close, order-line-<id>, qty-<id>, disc-<id>, free-<id>, order-line-del-<id>, order-remarks, order-submit. Order detail: order-detail-back, order-detail-status (Pressable — admin-only functional), order-line-view-<idx>. Backend run: `EXPO_PUBLIC_BACKEND_URL=<url> pytest /app/backend/tests/test_items_orders.py -v -o 'addopts='`. Business rules validated: net = qty*rate*(1-disc/100)*(1+tax/100), rounded 2dp; order_number = ORD-{n:05d} via atomic counter; admin cross-customer creation allowed; salesman scoped to own customers; status PATCH cycle Pending<->Paid<->Partial free (no forced ordering enforced server-side, admin UI cycles Pending->Paid->Partial->Pending in that order).",
+  "rca_of_issue": "No production issue. During the first frontend attempt I used `[data-testid^=\"order-cust-\"]` which matched `order-cust-search` (a TextInput) before any actual customer row; the click landed on the search box, `selected` state never changed, and Place Order later fired the 'Select a customer' error. This is a test-selector ambiguity, resolved by filtering out `order-cust-search`. Recommend renaming the search testID to `order-cust-search-input` for future robustness. The underlying flow is fully functional as verified by the corrected run (order ORD-00006 successfully created and status-cycled through Paid and Partial)."
+}

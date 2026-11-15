@@ -1,0 +1,40 @@
+{
+  "summary": "Frontend-only test of the new Admin 'Import Customers' flow. All target scenarios passed end-to-end on the Expo web preview (mobile viewport 390x844). Login (admin@fmcg.com/admin123) -> Dashboard, More tab tap -> /more, tap 'menu-import-customers' -> /import-customers screen loads with correct header. The 'Assign imported customers to' chip row rendered exactly three chips with correct testIDs: {assign-none:'Unassigned', assign-<johnId>:'John Doe', assign-<priyaId>:'Priya Sharma'}. The Skip/Update segmented control (testIDs dup-skip, dup-update) is visible and toggles state (visual selected style flips) on tap. File upload via expo-document-picker on web was validated using Playwright's expect_file_chooser context around the 'import-pick' Pressable — the hidden <input type=file> is created and receives the file correctly; picked filename ('import_test.csv') renders in the drop-zone. Upload #1 (Skip duplicate, 3-row CSV with brand-new mobiles 9990001111/2222/3333) tap 'import-submit' -> the result card (testID 'import-result') rendered: Rows processed=3, Created=3, Updated=0, Skipped=0, no errors, and 'View Customers' button visible. Note: skipped=0 (vs. curl-observed 1) because this run used unique mobile numbers — the backend correctly skipped nothing. Upload #2 re-uploads the same CSV with 'Update existing' selected (dup-update): result card shows Created=0, Updated=3, Skipped=0 — matches requirement of 'updated count > 0 and created = 0'. Tapped 'import-view-customers' -> navigated to /customers, and all three imported shops (TEST_Imp_Alpha Store, TEST_Imp_Beta Mart, TEST_Imp_Gamma Shop) are visible in the customer list (also verified via search-friendly customer-row-<id> testIDs present). No RN red-screen, no JS/network errors during flow. Only benign RN-web deprecation warnings ('shadow*' -> 'boxShadow', 'props.pointerEvents is deprecated'). No mocked APIs. multipart/form-data path via api.importCustomers works with Blob branch on web (fetch(uri).blob() -> FormData.append('file', blob, name)).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/tmp/import_test.csv (CSV used for import; 3 rows, mobiles 9990001111/2222/3333)",
+    "screenshots: /tmp/04_import_screen.png, /tmp/06_result_skip.png, /tmp/07_result_update.png, /tmp/08_cust_list.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "app/import-customers.tsx:34-53 pick() uses DocumentPicker.getDocumentAsync with correct MIME types (csv, xlsx, xls) and copyToCacheDirectory:true. Cleanly captures a.file so the web upload branch reuses the File object directly (line 62) — avoids an extra fetch->blob round-trip. Good.",
+    "app/import-customers.tsx:59-71 upload() correctly forks Platform.OS === 'web' vs native: web uses Blob/File append (form.append('file', blob, name)) which is required for the browser fetch multipart body; native uses the RN {uri,name,type} shape. Both paths present.",
+    "app/import-customers.tsx:141-146 in src/api.ts, importCustomers passes duplicate_mode and optional salesman_id as querystring while sending the FormData in the body — matches the backend route signature POST /api/customers/import?duplicate_mode=...&salesman_id=... expecting multipart file. Verified end-to-end.",
+    "src/screens/MoreScreen.tsx:41 The 'menu-import-customers' Row is inside the isAdmin gate — salesman users cannot see it. Good RBAC on UI (backend still enforces).",
+    "app/import-customers.tsx:147 On success, router.replace('/(admin)/customers') — the resolved URL is /customers (Expo Router group prefix stripped). Works, but note the code has a hard-coded '/(admin)/customers' string; for salesman this route would 404. It's only rendered inside the admin-gated More menu so unreachable in practice, but the coupling is worth a comment.",
+    "app/import-customers.tsx:35 pick() resets both error and result — good, prevents stale result card from lingering after choosing a new file.",
+    "Deprecation warnings from RN-web ('shadow*' and 'props.pointerEvents') are logged on this screen too. Non-blocking but noisy; already tracked in prior iterations."
+  ],
+  "updated_files": [
+    "/tmp/import_test.csv (test CSV; not in repo)",
+    "/app/test_reports/iteration_6.json"
+  ],
+  "success_rate": {
+    "backend": "not tested this iteration (frontend-only per request)",
+    "frontend": "100% (login -> More -> Import Customers -> chips render -> Skip/Update toggle -> file upload via filechooser -> result card counts correct in both modes -> View Customers navigates and imported shops visible)"
+  },
+  "seed_data_creation": "Created 3 TEST_Imp_* customers in MongoDB via the import flow with mobiles 9990001111, 9990002222, 9990003333 (approved, unassigned). Not deleted (spec said cleanup not mandatory). Main agent may prune by mobile prefix 999000 if desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Import Customers testIDs: import-back, import-pick, dup-skip, dup-update, assign-none, assign-<salesmanId>, import-submit, import-result, import-view-customers. Web file upload pattern with expo-document-picker: use Playwright's `async with page.expect_file_chooser() as fc: await page.click('[data-testid=\"import-pick\"]', force=True)` then `await (await fc.value).set_files('/path/to/file.csv')`. Login testIDs (from app/login.tsx): login-email-input, login-password-input, login-submit-button. Bottom tab 'More' is clicked via `page.get_by_text('More', exact=True).first.click()` — the tabs do not carry testIDs. Customer list uses customer-row-<id> and customers-search-input. Backend import endpoint: POST /api/customers/import?duplicate_mode=skip|update&salesman_id=<optional>, multipart file field name 'file', returns {total_rows,created,updated,skipped,errors[]}. All 3 imported rows come back with approval_status=approved and appear in /api/customers list.",
+  "rca_of_issue": "No bugs found. Feature works as designed. Minor test note: Skip-mode 'skipped' count was 0 in my run (vs curl-verified 1) because I used three fresh mobile numbers rather than a mix; this is the correct backend behavior, not a bug — it only skips when a mobile already exists in the DB."
+}

@@ -1,0 +1,44 @@
+{
+  "summary": "Backend + frontend tested for the 3 NEW features (Orders, Leaderboard, Beat Plan). Backend: 11/12 pytest cases passed (see /app/backend/tests/test_fmcg_new_features.py). Frontend (mobile 390x844): all 3 new screens load and work end-to-end. Orders screen shows Total ₹2,969 / Uncollected ₹2,469, filter chips (All/Pending/Paid/Partial) work, tapping a status pill cycled Pending → Paid and persisted (Local Grocer's outstanding was reduced accordingly — verified via customers GET). Leaderboard renders 2 salesmen with rank medals, visits, sales and 'X orders' subtext; period segmented control (Today/This Week/This Month) switches data. John's My Day > 'Beat Plan' CTA opens beat-plan screen; '+' opens shop picker (correctly scoped to John's 3 customers), tap-to-add works, up/down reorder works, remove (x) works, progress card updated 0/1 → 1/2 correctly, 'Log a Visit' navigates to /visit/new. FOUND 1 REAL BUG: POST /api/beat-plan does not validate customer ownership — a salesman can save a beat plan containing another salesman's customer, and it renders on their Beat screen (proof: my test posted Priya's 'Electronics Hub' into John's plan and it displayed on the UI). Backend scoping must be enforced. Regression: PATCH /api/orders auto-updates customer.outstanding correctly on Pending→Paid and Paid→Pending. Salesman is 403 on another salesman's order. Leaderboard is 403 for salesman. Deprecated packages: none detected (no expo-av / expo-barcode-scanner / expo-background-fetch). Only non-blocking RN-web 'shadow*' deprecation warnings (already reported in iteration_1).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/beat-plan", "issue": "Does not validate customer ownership. A salesman can persist a plan containing customers owned by another salesman; _build_beat_stops then returns those foreign stops in GET and they render on the salesman UI. Spec explicitly requires: 'a salesman can only build a plan of their own customers'. Fix: in set_beat_plan, filter body.customer_ids to those where db.customers.find_one({_id: OID(cid), salesman_id: str(user._id)}) exists when role=='salesman' (or 400 if any cid is foreign). Reference: /app/backend/server.py:869-879.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "PATCH /api/orders/{id}", "issue": "Uses max(0, outstanding+delta) — clamping is safe for negative outstanding but hides accounting errors. Consider logging when clamp is hit."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Salesman Beat Plan", "issue": "Because backend does not enforce ownership on POST /api/beat-plan, foreign customers show up as stops on the salesman's Beat screen (e.g. 'Electronics Hub' — South — appeared on John's beat). Frontend picker itself is correctly scoped, so this can only be triggered via direct API abuse — but still a real data-leak.", "affected_testIDs": ["beat-stop-*"]}
+    ],
+    "design_issues": [
+      {"screen": "beat-plan.tsx", "issues": ["Up/down arrow tap targets look ~24px; ideally 44x44 per iOS HIG for accessibility."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_fmcg_new_features.py",
+    "/app/test_reports/pytest/pytest_iter2.xml"
+  ],
+  "action_items": [
+    "Enforce salesman ownership in POST /api/beat-plan: for role='salesman', reject or silently drop customer_ids that don't belong to the caller (or return 403). Add a regression test that mirrors test_salesman_can_only_plan_own_customers.",
+    "(Optional) Increase up/down/remove hit-slop or size to ≥44x44 on beat-plan stop cards for a11y.",
+    "(Optional, carried over from iter1) Migrate 'shadow*' style props to boxShadow — cosmetic RN-web deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py:869 set_beat_plan blindly persists body.customer_ids without ownership check.",
+    "server.py:813 _build_beat_stops resolves any customer_id passed in — no salesman_id filter — so it will leak whatever set_beat_plan stored."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_fmcg_new_features.py",
+    "/app/test_reports/iteration_2.json"
+  ],
+  "success_rate": {"backend": "92% (11/12)", "frontend": "100% for tested flows (admin Orders, Leaderboard, salesman Beat Plan)"},
+  "seed_data_creation": "None net-new. Tests created 1 order via visits POST for Local Grocer (John), then reset payment status back to Pending. Cleaned up polluted beat plan for John (today) by re-posting his own 3 customer ids. Note: a TEST order (₹1234, Local Grocer, Pending) remains — safe to keep or delete.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend URL from EXPO_PUBLIC_BACKEND_URL in /app/frontend/.env. Run: `EXPO_PUBLIC_BACKEND_URL=<url> pytest /app/backend/tests/test_fmcg_new_features.py -v`. All new-feature testIDs are consistent: orders-back, quick-orders, quick-leaderboard, order-filter-{status}, order-status-{id}, order-row-{id}, leaderboard-back, period-{today|week|month}, leader-row-{id}, beat-plan-cta, beat-back, beat-add, beat-stop-{id}, beat-up-{id}, beat-down-{id}, beat-remove-{id}, beat-picker-close, beat-picker-search, beat-pick-{id}, beat-log-visit.",
+  "rca_of_issue": "Bug: POST /api/beat-plan accepts arbitrary customer_ids without validating that each belongs to the calling salesman. Reproduction: 1) Login as john (john@fmcg.com/sales123). 2) POST /api/beat-plan with {date: today, customer_ids: [ANY priya customer id]}. 3) GET /api/beat-plan → foreign stop is returned. 4) Salesman UI (My Day > Beat Plan) renders it. Mitigation: in `set_beat_plan`, if user.role=='salesman', run a single query `db.customers.find({_id: {$in: [OID(c) for c in body.customer_ids]}, salesman_id: str(user._id)})` and keep only those ids (or 403 on first foreign id). Also good to defensively filter inside `_build_beat_stops` for salesmen."
+}

@@ -1,0 +1,34 @@
+{
+  "summary": "Full backend + frontend test of the FMCG CRM MVP. Backend: 24/24 pytest cases passed covering auth (admin+salesman login, /me, wrong password 401, salesman-403-on-admin-endpoints), salesmen CRUD, customers CRUD with role scoping (admin sees 5, salesman sees only own), search/status filters, visits (creates order + updates customer.last_visit + last_order_amount when order_amount>0), orders listing, locations POST/GET/latest (admin-only 403 for salesman), dashboard scoped stats, customers-outstanding, and file upload/download via Emergent Object Storage. Frontend (mobile viewport 390x844): login screen renders, admin login navigates to dashboard showing 5 customers/₹44,200 outstanding/₹1,235 revenue, Customers tab lists all 5 shops, customer detail shows WhatsApp/Call/Map quick actions + Send reminder + Log Visit; quick action nav to Outstanding works. Salesman (john) login lands on My Day (Tracking on, 3 customers, ₹6,700 dues), Customers tab correctly scopes to 3 shops (John's) hiding Electronics Hub + Value Bazaar (Priya's), Log Visit flow completed end-to-end (Order result + amount + remarks -> submit -> back to customer detail). No deprecated packages (expo-av/barcode/background-fetch) detected. SafeAreaView correctly imported from react-native-safe-area-context. Minor RN-web deprecation warnings only ('shadow*' style props and props.pointerEvents) — cosmetic, not blocking.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/customers/{id}", "issue": "Uses CustomerIn (all required fields) instead of a partial-update model; client must resend full body. Works but is not idempotent for partial patches."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "StyleSheet (multiple screens)", "issue": "React-Native-Web deprecation warning: 'shadow*' style props are deprecated, use style.boxShadow. Non-blocking but should migrate. Reference: run `grep -rn shadowColor /app/frontend` — appears in card/tile styles."},
+      {"component": "Image / overlay component", "issue": "React-Native-Web deprecation warning: props.pointerEvents is deprecated, use style.pointerEvents. Non-blocking."}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_fmcg_crm.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "(Optional) Introduce a CustomerUpdate model with all-optional fields for PATCH /api/customers/{id} so partial updates work without resending the whole document.",
+    "(Optional/cosmetic) Migrate shadow* style props to boxShadow and props.pointerEvents to style.pointerEvents to silence RN-web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py: PATCH /api/customers/{cid} accepts CustomerIn (all fields required) — semantically a PUT; consider a partial CustomerUpdate model.",
+    "server.py: bare `except requests.HTTPError` in get_file swallows other exceptions silently — acceptable but consider logging."
+  ],
+  "updated_files": ["/app/backend/tests/test_fmcg_crm.py", "/app/test_reports/iteration_1.json"],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100% for tested flows (login, admin dashboard, customers list+detail, outstanding, salesman My Day, scoped customer list, visit logging)"},
+  "seed_data_creation": "None — used auto-seeded data (admin + 2 salesmen + 5 customers). Tests create/delete TEST_ prefixed records for isolation. A TEST_Salesman user was left in DB via the salesmen POST test (409 branch — safe, deactivated).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL: EXPO_PUBLIC_BACKEND_URL in frontend/.env. Pytest file at /app/backend/tests/test_fmcg_crm.py runs in ~5s covering all endpoints. All auth uses JWT bearer. Salesman scoping is enforced at query level. Storage-backed uploads work end-to-end. Frontend testIDs are consistent (login-*, stat-*, quick-*, visit-*, sm-*, due-*, etc.).",
+  "rca_of_issue": "N/A — no functional bugs found."
+}

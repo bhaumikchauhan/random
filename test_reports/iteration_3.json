@@ -1,0 +1,39 @@
+{
+  "summary": "Tested the NEW Salesman Attendance feature end-to-end. Backend: 13/13 pytest cases PASSED (see /app/backend/tests/test_attendance.py). Endpoints all behave per spec — GET /api/attendance/today returns the correct flags + record; POST /api/attendance/check-in creates today's record with lat/lng/photo; second check-in returns 400 'Already checked in today'; POST /api/attendance/check-out requires prior check-in (400 if not checked in), sets check_out_time and computes total_hours; second check-out returns 400; GET /api/attendance returns rows for ALL salesmen for admin (with present flag+record) and self-only for salesman; GET /api/attendance/summary?month=YYYY-MM returns per-salesman days_present + total_hours and correctly returns 403 for a salesman caller. Frontend (mobile 390x844): admin dashboard 'quick-attendance' tile navigates to /attendance, segmented Today/This Month tabs switch correctly, daily rows show Present/Absent badges + 'In HH:MM · Out HH:MM · Xh' times (2 of 3 present today badge), monthly rows show days + hours per salesman. Salesman flow (John — already checked out today): 'attendance-card' on My Day shows 'Shift complete / In at 06:08 am', tapping opens SalesmanAttendance which correctly renders 'Shift complete' state — no check-in/check-out buttons, shows 'Total:' hours row and the 'completed today' green confirmation. Camera selfie is device-only and cannot be exercised in headless web, per instructions — verified UI conditional rendering instead via John's checked-out state (proves the checkedIn/checkedOut state machine works). No red-screen errors. No deprecated packages (no expo-av/expo-barcode-scanner/expo-background-fetch). One pre-existing cosmetic RN-web 'shadow*' → 'boxShadow' warning carries over from iteration 1 — not blocking. NO NEW BUGS FOUND in the Attendance feature.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_attendance.py",
+    "/app/test_reports/pytest/pytest_iter3.xml"
+  ],
+  "action_items": [
+    "(Carried over from iteration 2 — still unresolved as of this run) Enforce salesman ownership in POST /api/beat-plan (out of scope for this iteration but still a real HIGH-priority bug).",
+    "(Optional, cosmetic) Migrate remaining 'shadow*' style props to 'boxShadow' to silence RN-web deprecation warning.",
+    "(Optional cleanup) Delete the TEST users/attendance rows created by pytest (email prefix 'TEST_att_'). They appear in AdminAttendance lists (e.g. 'TEST Attendance User — TEST' as Absent in daily and 0 days/0 hours in monthly)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:943-965 attendance_check_in correctly upserts with unique index on (salesman_id, date) — but relies on existing.check_in_time being None to short-circuit; upsert=True means an absent record would still be created. Safe because index prevents dupes.",
+    "SalesmanAttendance.tsx capture() flow is well-guarded: camera permission → photo upload → optional location → single API call. Errors surface into errorBox. No obvious race conditions.",
+    "AdminAttendance.tsx uses useFocusEffect so tab switching + returning from another screen refetches — good UX.",
+    "day.tsx correctly computes attendance icon color and subtitle using the three states (checked_out / checked_in / neither)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_attendance.py",
+    "/app/test_reports/iteration_3.json",
+    "/app/test_reports/pytest/pytest_iter3.xml"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% for the states testable in headless web (admin Today/Month lists + salesman checked-out state)"},
+  "seed_data_creation": "1 TEST salesman ('TEST_att_<ts>@fmcg.com' / pw123456, name 'TEST Attendance User', area 'TEST') was created via POST /api/salesmen to validate the 'check-out without check-in returns 400' negative case. Priya was checked in AND out via test (photos TEST_selfie_in.jpg / TEST_selfie_out.jpg, ~0.0 total_hours since flow was seconds apart). Safe to leave or clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Attendance testIDs — Salesman: attendance-card (on /day), attendance-back, check-in-btn, check-out-btn. Admin: quick-attendance (on /dashboard), menu-attendance (on /more), admin-att-back, att-tab-daily, att-tab-monthly, att-row-{salesman_id} (daily), att-month-{salesman_id} (monthly). Run backend tests: `EXPO_PUBLIC_BACKEND_URL=<url> pytest /app/backend/tests/test_attendance.py -v -o 'addopts='` (rootdir pytest.ini enables xdist which breaks state-dependent order; use -o 'addopts=' to disable). To test the fresh 'not checked in' UI branch, create a new salesman via admin POST /api/salesmen and log in as them before check-in — do NOT tap check-in-btn in headless web, it launches native camera.",
+  "rca_of_issue": "No bugs found in the Attendance feature this iteration."
+}

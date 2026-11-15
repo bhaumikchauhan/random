@@ -1,0 +1,81 @@
+{
+  "summary": "Full backend + frontend validation of iter-7 features: Routes master, Custom Fields, Item Import, Import Templates, Bulk WhatsApp, and Customer form with route/custom. Backend: 14/14 pytest cases passed (test_iter7_routes_customfields_items.py) — routes CRUD w/ admin RBAC + 409 duplicate + 5 seeded routes {North,South,East,West,Central}; custom-fields type/options validation (dropdown-without-options→400, invalid type→400), admin-only, list/create/delete OK, dropdown options are trimmed and empty entries dropped; customer create with 'route' + 'custom' dict persists and comes back via GET /customers/{id} and via list filters ?route=&customer_type=; item import CSV skip vs update flow produced 3-created/3-skipped/3-updated exactly, values persisted in /api/items; xlsx templates return 200 with the exact expected header rows; salesman blocked (403) from all admin write endpoints. Frontend (mobile 390x844, admin admin@fmcg.com): More tab shows all 5 new rows (menu-import-items, menu-bulk-whatsapp, menu-routes, menu-custom-fields, menu-import-customers); Routes screen creates 'TEST_UI_R7' and it appears in the list; Custom Fields screen creates text field 'TEST UI Shop Size' and dropdown 'TEST UI Grade [A,B,C]' — both listed with correct type badge; Add Customer form now renders 6 Route chips (route-<id>) AND both custom fields as chip-set (cf-test_ui_grade-A/B/C) + text input (cf-test_ui_shop_size); saving a customer with shop_name + mobile + North route + custom values persists — verified via backend GET returning route='North' and custom={test_ui_shop_size:'Large Shop', test_ui_grade:'B'}; Import Items: 'Download template' triggers a real browser download of 'item_import_template.xlsx'; CSV upload for 2 rows via expect_file_chooser returns Created=2/Updated=0/Skipped=0; 'View Items' navigates to /items and TEST UI Item A/B are visible; Import Customers screen has a working 'import-template' Pressable that downloads 'customer_import_template.xlsx'; Bulk WhatsApp: route/type/search filters all narrow the customer list correctly, Select all + individual selection both work (counter updates), Start Sending advances to sending phase: Sending 1/2 shows shop_name (Electronics Hub) with {shop_name} replaced in preview, Open WhatsApp button + 'Mark sent & Next' both present; Next advances to 2/2 (Fresh Foods Corner) and the 3rd tap lands on the 'All done!' screen with Finish button (bw-finish). Cleanup: deleted the test route, both custom fields, and the seeded test customer via API. No mocked APIs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Routes screen (app/routes.tsx:41-49)",
+        "issue": "Delete uses React Native Alert.alert which on Expo Web does not render the destructive/Cancel buttons — tapping the trash icon shows no confirmation and the route is NOT deleted from the UI/DB. The delete flow only works on native. Recommend using a custom Modal/confirm on web, or Platform.select. On web the RN-web Alert polyfill only fires the first (default) button; wrapping onPress in Platform.OS==='web' ? window.confirm(...) : Alert.alert(...) fixes it.",
+        "testID": "route-del-<id>",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "Custom Fields modal (app/customer-fields.tsx:108-146)",
+        "issue": "The Modal + KeyboardAvoidingView slides up but Playwright reports type chips (cf-type-text/number/dropdown) as 'outside of viewport' on 390x844 — real mobile UX is fine, but on web the modal's transform-based slide-in animation can leave portions clipped in ScrollView. Recommend adding contentContainerStyle padding + ensuring modal max-height content is scrollable on short viewports. Workaround: dispatchEvent click via JS works.",
+        "testID": "cf-type-text",
+        "priority": "LOW"
+      },
+      {
+        "component": "Customer detail screen (post-save)",
+        "issue": "Detail screen shows Contact + Business only; it does NOT display the selected Route or Custom Fields the user entered on the form. Persistence is fine (GET returns route+custom), but there is no read-only view of these values. Recommend adding a 'Route' row under Business and an 'Additional Details' section listing custom fields. Not blocking today's scope but requested via 'reopen the customer'.",
+        "testID": "",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Add Customer",
+        "issues": [
+          "Long 'TEST UI Shop Size' custom field label wraps but Field component keeps label + input compact — OK. Chip row for dropdown wraps as expected."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "Alert.alert on Web",
+        "issue": "Routes delete + Custom Fields delete both use Alert.alert(destructive) which does NOT render properly on React Native Web (Expo web preview). Reference: /app/frontend/app/routes.tsx:41 and /app/frontend/app/customer-fields.tsx:60."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter7_routes_customfields_items.py",
+    "/app/test_reports/pytest/pytest_iter7.xml",
+    "/tmp/iter7/*.png (screenshots)",
+    "/tmp/iter7/items_import.csv"
+  ],
+  "action_items": [
+    "Wrap the destructive Alert.alert in Routes and Custom Fields with Platform.OS==='web' ? window.confirm(msg) : Alert.alert(...) so delete works in the web preview too.",
+    "Consider displaying the customer's Route + Custom Fields on the Customer detail screen (read view) so admins can verify their entries without opening the Edit form.",
+    "OPTIONAL: Seed customers now have only 'area' set, not 'route' — dashboard/Bulk WhatsApp Central-route filter is empty until admins manually set routes. Not a bug, but consider mirroring area -> route on seed for demo."
+  ],
+  "critical_code_review_comments": [
+    "backend/server.py:1317-1326 create_route rejects duplicate names case-insensitively via $regex — correct. Uses ObjectId string id — good, no _id leak.",
+    "backend/server.py:1356-1372 create_customer_field: validates type, requires options for dropdown (400), trims/dedup options via _slugify. Slug collision handled by appending 4 hex chars — good.",
+    "backend/server.py:1408-1466 items/import handles skip/update by item_code, tolerates empty rows, header alias map covers common variants (item code / sku / rate / gst / mrp).",
+    "backend/server.py:1490-1509 template endpoints correctly gated to admin (require_admin) and return xlsx MIME + Content-Disposition. openpyxl is available in requirements.",
+    "backend/server.py:619-641 customer list query correctly ANDs the ?route= and ?customer_type= filters into the mongo query — verified via 4 filter permutations.",
+    "frontend/src/screens/CustomerForm.tsx:184-197,226-255 conditionally renders Route chips (route-<id>) and Custom Fields block only when arrays are non-empty — clean fallback. setCustom writes into form.custom dict which POST /customers accepts as-is (backend CustomerIn.custom is Optional[dict]).",
+    "frontend/app/bulk-whatsapp.tsx:38-48 concurrently loads customers + routes with Promise.all; filters out customers without mobile/whatsapp — correct. personalize() escapes {shop_name} case-insensitively — good.",
+    "frontend/app/bulk-whatsapp.tsx:69-79 startSending resets idx + sentIds; nextCustomer increments idx and 'done' check (idx>=len) shows the 'All done' state — clean state machine.",
+    "frontend/app/import-items.tsx:47-63 web/native FormData branch is identical to /import-customers pattern — reusable.",
+    "frontend/src/screens/MoreScreen.tsx:36-49 New menu rows are all inside isAdmin gate — backend still enforces (already 403-tested), so RBAC is defense-in-depth."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter7_routes_customfields_items.py",
+    "/app/test_reports/iteration_7.json",
+    "/app/test_reports/pytest/pytest_iter7.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 pytest cases)",
+    "frontend": "~95% (all target flows verified end-to-end; the only broken sub-step is destructive delete on Routes/Custom Fields on the WEB preview due to RN-Web Alert.alert limitation — records were cleaned up via API instead)"
+  },
+  "seed_data_creation": "During UI test, created & cleaned up: route 'TEST_UI_R7', custom fields 'TEST UI Shop Size' (text) and 'TEST UI Grade' (dropdown A,B,C), 1 customer 'TEST_UI_Shop_R7_<ts>' (mobile 98xxxxxxxx, route=North, custom values). All 4 items were cleaned up via API DELETEs at end of the run. Two TESTUI001/TESTUI002 items were also imported via UI CSV upload — NOT cleaned up (only 2 rows, MRP 60/180). Backend test suite cleans up its own TEST_ prefixed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter-7 testIDs quick ref: More rows menu-{routes,custom-fields,import-items,bulk-whatsapp,import-customers,leaderboard,salesmen}. Routes: route-name-input, route-add-btn, routes-back, route-row-<id>, route-del-<id>. Custom fields: cf-add-btn, cf-back, cf-label, cf-type-{text,number,dropdown}, cf-options, cf-save-btn, cf-modal-close, cf-row-<id>, cf-del-<id>. On Customer form: route-<id> chips, cf-<key> for text/number, cf-<key>-<option> for dropdown. Import Items: iimport-{back,template,pick,submit,view,result}, idup-{skip,update}. Bulk WhatsApp: bw-{back,search,route-<name>,type-<name>,select-all,cust-<id>,message,start,send-back,open-wa,next,finish}. Alert.alert delete does NOT confirm on web — for cleanup call the backend DELETE endpoints directly. To upload files in Playwright: `async with page.expect_file_chooser() as fc: await page.click('[data-testid=\"iimport-pick\"]', force=True); (await fc.value).set_files('/path')`. Deep links: openWhatsApp is a stub on web — clicking bw-open-wa opens wa.me in a new tab (harmless in tests).",
+  "rca_of_issue": "No blocking bugs. Two UX gaps on web only: (a) Alert.alert(destructive) on Routes/Custom Fields does not prompt on Expo Web — deleting from those screens silently no-ops on web (works fine on native). RCA: react-native-web Alert polyfill collapses to a single-button alert. Fix: gate on Platform.OS==='web' and use window.confirm, OR use a custom in-app confirm Modal. (b) Customer detail screen omits route/custom fields — purely a display gap, data is persisted correctly."
+}

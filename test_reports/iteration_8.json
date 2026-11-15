@@ -1,0 +1,63 @@
+{
+  "summary": "Iter-8 backend + frontend validation complete. Backend: 25/25 pytest cases passed (test_iter8_features.py) covering (1) custom-field types multiselect+checkbox (multiselect requires options -> 400 without, dropdown w/o options -> 400, checkbox saves with empty options, and customer create with custom={ms:['a','b'], cb:true}+route persists and comes back via GET), (2) per-salesman can_edit_customers toggle via PATCH /salesmen/{id} appears in UserOut/list, salesman can edit own pending customer, receives 403 on approved customer when flag false, 200 when true, admin can always edit, (3) unique customer_code CUST-##### assigned on create (existing customers have codes), import xlsx with 'Customer ID'=SA-XXXX preserves the code and rows without a code auto-generate CUST-#####, GET /import-templates/customers xlsx has 'Customer ID' as first column, (4) GET /orders/export xlsx headers row = [ORDER NUMBER, DATE, CUSTOMER ID, PARTY NAME, ...] with customer_code populated in col-3, (5) visit-tasks: PUT upsert (target='all', require_photo=true, questions=[{single,required}]) returns target_name='All salesmen', admin list contains 'all', salesman GET /visit-tasks/applicable returns the config, POST /visits without task_photo->400, missing required answer keyed by LABEL->400, valid submission 201 and shows in GET /visits with task_photo+task_answers, DELETE /visit-tasks/all removes it. Frontend (mobile 390x844, admin admin@fmcg.com): had to first fix a blocking bundling SyntaxError in /app/frontend/app/customer/[id].tsx (duplicate 'Image' import: 'Image' imported from both react-native and expo-image). After fix: More tab shows the new 'menu-visit-tasks' row alongside menu-custom-fields, menu-salesmen etc. Visit Tasks screen: selected 'All salesmen', toggled Photo required, added a required Single-select question TEST_UI_Q_iter8 [Yes,No,Maybe] and Save -> appears under Existing checklists (vt-cfg-all). Custom Fields: created Multi-select (Alpha,Beta,Gamma) and Checkbox custom fields, both visible in list with correct type. Manage Salesmen: toggled 'Can edit customers' on John, reloaded, verified via /api/salesmen that can_edit_customers=true persisted, toggled back. Add Customer form: shop_name+mobile+route(Central)+multiselect(Alpha,Beta)+checkbox(Yes) submitted, opened new customer -> detail screen renders Customer ID (CUST-00011), Route Central, and 'Additional Details' section with TEST_UI_MS_iter8=Alpha,Beta and TEST_UI_CB_iter8=Yes. New Bill screen: Route chip row (order-route-All/Central/East/North/South/West) appears above search; selecting Central filters customer list from 8 to 4 and 'All Routes' returns to 8. Salesman flow (john@fmcg.com): Log Visit shows the 'Visit Tasks' block with required Photo box + required Single-select TEST_UI_Q_iter8; Saving without either surfaces validation 'A photo is required for this visit' from backend and blocks submission. Cleanup: deleted the visit-tasks 'all' config, TEST_UI_MS/CB custom fields, TEST_UI_ShopMS_iter8 customer, reset any can_edit_customers toggles to false. Deprecated packages detected: none new. Note: post-save on Add Customer form calls router.back() which errors on web when opened directly (no history) - the customer IS saved (verified via list). No mocked APIs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Add Customer form (src/screens/CustomerForm.tsx save handler)",
+        "issue": "After successful save, the form calls router.back(). When the screen is opened via a deep link (e.g. /customer/new directly, or after login redirect flow), the router has no back-stack and the RN Navigation console warns 'GO_BACK was not handled by any navigator.' The customer IS created but the user is stranded on the form. Recommend router.replace(`/customer/${newId}`) instead of router.back().",
+        "testID": "save-customer-btn",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "Duplicate 'Image' import (app/customer/[id].tsx:2 and :4) — BLOCKED all web + native bundles",
+        "issue": "SyntaxError: Identifier 'Image' has already been declared. 'Image' was imported from both 'react-native' and 'expo-image'. The whole app failed to bundle on Web/iOS/Android until this was fixed. Reference: /app/frontend/app/customer/[id].tsx:2. FIX APPLIED by testing agent (removed the Image import from react-native — expo-image is used everywhere in this file)."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter8_features.py",
+    "/app/test_reports/pytest/pytest_iter8.xml",
+    "/tmp/it8_*.png (screenshots)"
+  ],
+  "action_items": [
+    "OPTIONAL: change CustomerForm save-flow from router.back() to router.replace(`/customer/${created.id}`) — avoids the console 'GO_BACK not handled' warning when the form is entered via deep-link and also matches the requested flow of 'opening the newly saved customer'.",
+    "Consider adding testIDs to the tab bar buttons (tab-dashboard, tab-customers, tab-visits, tab-map, tab-more) in app/(admin)/_layout.tsx and app/(salesman)/_layout.tsx — testing had to fall back to text-based selectors."
+  ],
+  "critical_code_review_comments": [
+    "backend/server.py:1449-1463 create_customer_field correctly validates {text,number,dropdown,multiselect,checkbox} and requires options for dropdown+multiselect. checkbox stored with options=[] as expected.",
+    "backend/server.py:921-942 update_customer PATCH: correctly checks approval_status != 'pending' AND can_edit_customers=false to return 403 for salesman-owned approved customers. Admin bypass is fine. customer_code popped so it stays immutable — good.",
+    "backend/server.py:591-607 update_salesman PATCH uses model_dump(exclude_unset=True) so can_edit_customers=false doesn't get filtered by the value-truthiness pass — correct pattern.",
+    "backend/server.py:717-734 _next_customer_code uses find_one_and_update with $inc + upsert on a 'counters' doc — atomic and formatted as CUST-{seq:05d}. 385-390 backfill on startup covers legacy customers.",
+    "backend/server.py:866-895 customer import: reads 'Customer ID' column (via _CUSTOMER_HEADER_MAP alias 'customer id/code/party code/id'), preserves the provided code, and auto-generates only when blank. Good uniqueness check via find_one({customer_code}).",
+    "backend/server.py:1156-1225 orders export xlsx: 3rd column 'CUSTOMER ID' populated from a pre-built code_map keyed by customer_id -> customer_code. Only submitted orders exported — matches spec.",
+    "backend/server.py:1055-1066 create_visit: reads _applicable_visit_config (own salesman config, else 'all'), enforces require_photo -> 400 and required questions by LABEL key -> 400 (accepts empty list/none/'').",
+    "backend/server.py:1492-1521 visit-tasks upsert/list/applicable/delete cleanly separated. _visit_task_out resolves target_name via db.users lookup — good.",
+    "frontend/app/customer/[id].tsx duplicate Image import bricked bundling — fixed by removing the react-native Image import (expo-image handles both local and remote sources in this file). Small file (295 lines), no other issues.",
+    "frontend/app/order/new.tsx:125-131 route chip row is rendered only when routes.length>0 and 'All Routes' chip resets filter — clean. filtered() joins area/route match.",
+    "frontend/app/visit/new.tsx:216-268 Visit Tasks block reads /visit-tasks/applicable and renders photo box + questions keyed by q.label (matches backend enforcement key). Frontend validation (219-227) matches backend rules, so users see errors immediately — good.",
+    "frontend/src/screens/CustomerForm.tsx:230-284 renders multiselect as multi-toggle chips (cf-<key>-<opt>) and checkbox as a check row with Switch — matches expected UX."
+  ],
+  "updated_files": [
+    "/app/frontend/app/customer/[id].tsx  (removed duplicate 'Image' import from react-native — expo-image is used)",
+    "/app/backend/tests/test_iter8_features.py  (new)",
+    "/app/test_reports/iteration_8.json",
+    "/app/test_reports/pytest/pytest_iter8.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (25/25 pytest cases)",
+    "frontend": "100% of the requested target flows verified end-to-end after fixing the blocking duplicate-Image import"
+  },
+  "seed_data_creation": "During UI test, created & cleaned up: visit-tasks 'all' config (photo-required + required Single-select TEST_UI_Q_iter8 [Yes,No,Maybe]); custom fields TEST_UI_MS_iter8 (multiselect Alpha,Beta,Gamma) + TEST_UI_CB_iter8 (checkbox); 1 customer TEST_UI_ShopMS_iter8 (Central route, MS=[Alpha,Beta], CB=true); toggled John Doe can_edit_customers on then off. Backend test suite cleans up its own TEST_-prefixed data. All artifacts removed via API DELETEs at end of the run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter-8 testIDs quick ref — Visit Tasks: vt-back, vt-target-<id_or_all>, vt-require-photo, vt-add-q, vt-q-<i>, vt-q-label-<i>, vt-q-type-<i>-<text|number|single|multi>, vt-q-opts-<i>, vt-q-req-<i>, vt-q-del-<i>, vt-save, vt-cfg-<target>, vt-cfg-del-<target>. Custom Fields new types cf-type-multiselect, cf-type-checkbox. Salesmen: salesman-canedit-<id> (Pressable that toggles can_edit_customers via PATCH). New Bill: order-route-All + order-route-<route-name> chip row above order-cust-search. Log Visit: visit-task-photo (photo box), vq-<i>-<option> for single/multi choice, vq-<i> TextInput for text/number. Customer detail /customer/[id]: renders Customer ID (from customer_code CUST-#####), Route, and 'Additional Details' section iterating custom fields. Login testIDs: login-email-input, login-password-input, login-submit-button (NOT the shorter names in the request). Tab bar has NO testIDs — use get_by_text('More', exact=True). After creating a customer via /customer/new the form calls router.back() and warns in console when there's no back-stack — the customer IS saved; use the customer list to open the new record.",
+  "rca_of_issue": "One blocking bug found and fixed by testing agent: /app/frontend/app/customer/[id].tsx had `import { Image } from 'react-native'` and `import { Image } from 'expo-image'` back-to-back (lines 2 and 4) — Babel raised 'Identifier Image has already been declared' and the entire Metro bundle failed for iOS/Android/Web. Fix: dropped Image from the react-native import (expo-image is used at both call sites at lines 86 and 207). Everything else worked as designed. One low-priority UX gap: CustomerForm's save handler uses router.back() which no-ops with a console warning when the screen is opened via a deep link — recommend router.replace(`/customer/${created.id}`)."
+}

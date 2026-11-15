@@ -18,6 +18,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
+from fastapi import Request as FastAPIRequest
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr, Field
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -559,9 +560,21 @@ def require_admin(user=Depends(current_user)):
 
 # ============ Auth ============
 @api.post("/auth/login", response_model=TokenOut)
-async def login(body: LoginIn, db=Depends(get_db)):
-    u = await db.users.find_one({"email": body.email.lower().strip()})
-    if not u or not verify_password(body.password, u["password_hash"]):
+async def login(request: FastAPIRequest, db=Depends(get_db)):
+    # Accept JSON (app/tests) and form-data (Swagger Authorize button)
+    ct = request.headers.get("content-type", "")
+    if "application/json" in ct:
+        payload = await request.json()
+        email = str(payload.get("email", "")).lower().strip()
+        password = str(payload.get("password", ""))
+    else:
+        form = await request.form()
+        email = str(form.get("username", "")).lower().strip()
+        password = str(form.get("password", ""))
+    if not email or not password:
+        raise HTTPException(422, "email and password required")
+    u = await db.users.find_one({"email": email})
+    if not u or not verify_password(password, u["password_hash"]):
         raise HTTPException(401, "Incorrect email or password")
     if not u.get("active", True):
         raise HTTPException(403, "User disabled")
